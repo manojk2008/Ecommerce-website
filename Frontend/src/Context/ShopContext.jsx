@@ -1,6 +1,7 @@
 import React, { createContext, useEffect, useState } from 'react'
 import { products } from '../assets/assets';
 import { toast } from 'react-toastify';
+import axios from 'axios'
 import { useNavigate } from 'react-router-dom';
 
 export const ShopContext = createContext();
@@ -14,12 +15,16 @@ const ShopContextProvider = (props) => {
     const [cartItems, setCartItems] = useState({})
     const navigate = useNavigate()
 
+    const [token, setToken] = useState("");
+
+  const backendUrl = import.meta.env.VITE_BACKEND_URL;
+
 
     const addToCart = async (itemId,size)=> {
 
       if (!size) {
         toast.error('Select Size')
-        return
+        return;
       }
 
       let cartData = structuredClone(cartItems)
@@ -36,7 +41,16 @@ const ShopContextProvider = (props) => {
         cartData[itemId] = {}
         cartData[itemId][size] = 1
       }
-      setCartItems(cartData)
+      setCartItems(cartData);
+
+      if (token) {
+        try {
+          await axios.post(backendUrl + '/api/cart/add', {itemId, size}, {headers:{token}})
+        } catch (error) {
+          console.log(error);
+          toast.error(error.message)
+        }
+      }
     }
 
 
@@ -63,6 +77,15 @@ const ShopContextProvider = (props) => {
        cartData[itemId][size] = quantity
 
        setCartItems(cartData)
+
+       if (token) {
+        try {
+          await axios.post(backendUrl + '/api/cart/update', {itemId, size, quantity}, {headers:{token}})
+        } catch (error) {
+          console.log(error);
+          toast.error(error.message)
+        }
+       }
       
     }
 
@@ -76,20 +99,42 @@ const ShopContextProvider = (props) => {
                 totalAmount += itemInfo.price * cartItems[items][item]
               }
             } catch (error) {
-              
+              console.log(error);
+          toast.error(error.message)
             }
           }
       }
       return totalAmount;
     }
 
+    const getUserCart = async (token) =>{
+      try {
+        const response = await axios.post(backendUrl + '/api/cart/get', {}, {headers: {token}})
+        if (response.data.success) {
+          setCartItems(response.data.cartData)
+        }
+      } catch (error) {
+        console.log(error);
+          toast.error(error.message)
+      }
+    }
+
     const value = {
         products, currency, delivery_fee,
         search, setSearch, showSearch, setShowSearch,
-        cartItems, addToCart,
+        cartItems, addToCart, setCartItems,
         getCartCount, updateQuantity,
-        getCartAmount,navigate
+        getCartAmount,navigate, token, setToken, backendUrl, getUserCart
     }
+    // When app loads, restore token from localStorage
+useEffect(() => {
+    const savedToken = localStorage.getItem('token')
+    if (savedToken) {
+        setToken(savedToken)
+        getUserCart(savedToken)
+    }
+}, []) // empty array = runs once on mount
+
   return (
     <ShopContext.Provider value={value}>
         {props.children}
